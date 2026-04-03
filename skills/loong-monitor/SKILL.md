@@ -56,10 +56,25 @@ python3 skills/loong-monitor/scripts/collect_repo_activity.py \
   --output /tmp/loong-monitor-march
 ```
 
+For one-click weekly or monthly reporting, use the preset runner:
+
+```bash
+python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
+  --preset weekly
+```
+
+```bash
+python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
+  --preset monthly \
+  --repo loongclaw-ai/loongclaw
+```
+
 The script produces:
 
 - `activity.json`: raw collected issue and PR data plus computed summary signals
 - `summary.md`: a compact evidence digest you can quote and reason over
+- `report.md`: a full Markdown monitoring report when you use the one-click preset runner
+- `run.txt`: a small manifest showing the exact output paths for the run
 
 When you need a full report, generate it from the collected artifact:
 
@@ -84,6 +99,7 @@ Do not treat inferred roadmap direction as confirmed fact unless it is explicitl
 Use [assets/report-template.md](assets/report-template.md) as the output skeleton when the user wants a written report.
 
 Prefer the generated report script when the user asks for a reusable report artifact, a weekly digest, or a compare-the-last-two-windows assessment.
+Prefer the preset runner when the user explicitly wants a weekly report, monthly report, or a repeatable one-command monitoring workflow.
 
 Minimum report structure:
 

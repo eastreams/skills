@@ -333,6 +333,7 @@ def render_report(payload: dict[str, Any]) -> str:
     comparison = payload.get("comparison")
     focus_areas = choose_focus_areas(summary)
     generated_at = payload.get("generated_at") or datetime.now(timezone.utc).isoformat()
+    run_metadata = payload.get("run_metadata") or {}
 
     lines = [
         "# LoongClaw Monitor Report",
@@ -340,10 +341,10 @@ def render_report(payload: dict[str, Any]) -> str:
         f"- Repository: `{payload['repo']}`",
         f"- Monitoring window: {payload['window']['since']} to {payload['window']['until']}",
         f"- Generated at: {generated_at}",
-        "",
-        "## Executive Summary",
-        "",
     ]
+    if run_metadata.get("preset"):
+        lines.append(f"- Run preset: `{run_metadata['preset']}`")
+    lines.extend(["", "## Executive Summary", ""])
     lines.extend(f"- {line}" for line in executive_summary(payload))
 
     lines.extend(["", "## Current Focus Areas", ""])
