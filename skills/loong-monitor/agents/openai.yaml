@@ -1,0 +1,4 @@
+interface:
+  display_name: "Loong Monitor"
+  short_description: "Analyze LoongClaw GitHub activity trends"
+  default_prompt: "Use $loong-monitor to analyze recent activity in loongclaw-ai/loongclaw and produce a concise status report."
