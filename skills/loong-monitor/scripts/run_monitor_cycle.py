@@ -22,13 +22,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--preset",
-        choices=["weekly", "monthly", "calendar-week", "calendar-month"],
+        choices=["weekly", "monthly", "quarter", "calendar-week", "calendar-month", "calendar-quarter"],
         required=True,
         help=(
             "Reporting preset. "
-            "weekly=last 7 days, monthly=last 30 days, "
+            "weekly=last 7 days, monthly=last 30 days, quarter=last 90 days, "
             "calendar-week=from Monday of the containing ISO week to --until, "
-            "calendar-month=from the first day of the containing month to --until."
+            "calendar-month=from the first day of the containing month to --until, "
+            "calendar-quarter=from the first day of the containing quarter to --until."
         ),
     )
     parser.add_argument(
@@ -69,10 +70,15 @@ def compute_window(preset: str, until: date) -> tuple[date, date]:
         since = until - timedelta(days=6)
     elif preset == "monthly":
         since = until - timedelta(days=29)
+    elif preset == "quarter":
+        since = until - timedelta(days=89)
     elif preset == "calendar-week":
         since = until - timedelta(days=until.weekday())
-    else:
+    elif preset == "calendar-month":
         since = until.replace(day=1)
+    else:
+        quarter_start_month = ((until.month - 1) // 3) * 3 + 1
+        since = until.replace(month=quarter_start_month, day=1)
     return since, until
 
 
