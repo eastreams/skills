@@ -35,6 +35,15 @@ def count_value(summary: dict[str, Any], group: str, name: str) -> int:
     return int(summary["counts"][group][name])
 
 
+def detail_coverage(payload: dict[str, Any]) -> float:
+    summary = payload["summary"]
+    total_items = count_value(summary, "prs", "total") + count_value(summary, "issues", "total")
+    if total_items == 0:
+        return 0.0
+    detailed_items = len(payload.get("prs", [])) + len(payload.get("issues", []))
+    return detailed_items / total_items
+
+
 def choose_focus_areas(summary: dict[str, Any]) -> list[dict[str, str]]:
     path_items = summary.get("top_paths", [])
     label_items = summary.get("top_labels", [])
@@ -269,6 +278,64 @@ def risks_and_questions(summary: dict[str, Any], comparison: dict[str, Any] | No
     return risks
 
 
+def confidence_and_uncertainty(payload: dict[str, Any]) -> tuple[str, list[str]]:
+    summary = payload["summary"]
+    comparison = payload.get("comparison")
+    evidence_points = count_value(summary, "prs", "total") + count_value(summary, "issues", "total")
+    top_labels = len(summary.get("top_labels", []))
+    top_paths = len(summary.get("top_paths", []))
+    coverage = detail_coverage(payload)
+    previous_total = 0
+    if comparison:
+        previous_total = (
+            comparison["previous"]["counts"]["prs"]["total"]
+            + comparison["previous"]["counts"]["issues"]["total"]
+        )
+
+    reasons: list[str] = []
+    score = 0
+
+    if evidence_points >= 20:
+        score += 2
+        reasons.append("The report is based on a non-trivial activity sample across PRs and issues.")
+    elif evidence_points >= 10:
+        score += 1
+        reasons.append("The report has a moderate activity sample, which is usable but not exhaustive.")
+    else:
+        reasons.append("The activity sample is small, so conclusions should be treated cautiously.")
+
+    if top_labels >= 5:
+        score += 1
+        reasons.append("Label coverage is reasonably rich, which helps identify active themes.")
+    else:
+        reasons.append("Label coverage is sparse, so thematic clustering is weaker than ideal.")
+
+    if top_paths >= 3 and coverage >= 0.5:
+        score += 1
+        reasons.append("Detailed PR lookups cover enough items to support file-path-based focus inference.")
+    elif top_paths == 0:
+        reasons.append("Path-level evidence is weak or absent, which limits subsystem confidence.")
+    else:
+        reasons.append("Only part of the activity sample has detailed path coverage, so subsystem conclusions are directional.")
+
+    if comparison:
+        if previous_total > 0:
+            score += 1
+            reasons.append("Previous-window data exists, so trend statements have an actual baseline.")
+        else:
+            score -= 1
+            reasons.append("The previous comparison window had no collected activity, so trend statements are less reliable than current-state statements.")
+
+    if score >= 4:
+        level = "High"
+    elif score >= 2:
+        level = "Medium"
+    else:
+        level = "Low"
+
+    return level, reasons
+
+
 def likely_next_directions(payload: dict[str, Any]) -> list[str]:
     summary = payload["summary"]
     comparison = payload.get("comparison")
@@ -334,6 +401,7 @@ def render_report(payload: dict[str, Any]) -> str:
     focus_areas = choose_focus_areas(summary)
     generated_at = payload.get("generated_at") or datetime.now(timezone.utc).isoformat()
     run_metadata = payload.get("run_metadata") or {}
+    confidence_level, confidence_reasons = confidence_and_uncertainty(payload)
 
     lines = [
         "# LoongClaw Monitor Report",
@@ -357,6 +425,10 @@ def render_report(payload: dict[str, Any]) -> str:
 
     lines.extend(["", "## Risks And Open Questions", ""])
     lines.extend(f"- {line}" for line in risks_and_questions(summary, comparison))
+
+    lines.extend(["", "## Confidence And Uncertainty", ""])
+    lines.append(f"- Confidence level: {confidence_level}")
+    lines.extend(f"- {line}" for line in confidence_reasons)
 
     lines.extend(["", "## Likely Next Directions", ""])
     lines.extend(f"- {line}" for line in likely_next_directions(payload))

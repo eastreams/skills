@@ -69,6 +69,19 @@ python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
   --repo loongclaw-ai/loongclaw
 ```
 
+For calendar-aligned reporting:
+
+```bash
+python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
+  --preset calendar-week
+```
+
+```bash
+python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
+  --preset calendar-month \
+  --until 2026-03-31
+```
+
 The script produces:
 
 - `activity.json`: raw collected issue and PR data plus computed summary signals
@@ -99,7 +112,7 @@ Do not treat inferred roadmap direction as confirmed fact unless it is explicitl
 Use [assets/report-template.md](assets/report-template.md) as the output skeleton when the user wants a written report.
 
 Prefer the generated report script when the user asks for a reusable report artifact, a weekly digest, or a compare-the-last-two-windows assessment.
-Prefer the preset runner when the user explicitly wants a weekly report, monthly report, or a repeatable one-command monitoring workflow.
+Prefer the preset runner when the user explicitly wants a weekly report, monthly report, calendar-aligned report, or a repeatable one-command monitoring workflow.
 
 Minimum report structure:
 
@@ -109,6 +122,7 @@ Minimum report structure:
 - Current status and delivery signals
 - Comparison to previous window when requested
 - Risks, blockers, and unresolved threads
+- Confidence and uncertainty level
 - Likely next directions
 - Evidence appendix with linked issue and PR references
 

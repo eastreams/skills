@@ -78,6 +78,24 @@ Always mark these statements as inference or likely direction.
 
 If a new direction is inferred from only one PR or issue, say that confidence is low.
 
+## Confidence Guidance
+
+Use an explicit confidence statement in the report.
+
+Higher confidence requires most of these conditions:
+
+- a non-trivial sample of recent PRs and issues
+- enough detailed PR lookups to support path-level subsystem claims
+- useful label coverage or repeated specific title terms
+- a non-empty previous window when you make trend claims
+
+Lower confidence is appropriate when:
+
+- the sample is small
+- labels are sparse or noisy
+- detailed path coverage is limited
+- the previous comparison window is empty or nearly empty
+
 ## Report Checklist
 
 Before finalizing the report, ensure it includes:

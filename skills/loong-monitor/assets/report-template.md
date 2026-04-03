@@ -38,6 +38,14 @@ Optional when comparison data is available:
 
 Call out stalled PRs, unresolved issues, review bottlenecks, or missing follow-through.
 
+## Confidence And Uncertainty
+
+State:
+
+- confidence level: high, medium, or low
+- why the evidence supports that level
+- what the current report cannot confidently infer
+
 ## Likely Next Directions
 
 Mark this section as inference. Explain what the current activity pattern suggests may happen next.

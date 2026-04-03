@@ -13,7 +13,7 @@ from pathlib import Path
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run loong-monitor in one step for weekly or monthly reporting."
+        description="Run loong-monitor in one step for rolling or calendar reporting."
     )
     parser.add_argument(
         "--repo",
@@ -22,9 +22,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--preset",
-        choices=["weekly", "monthly"],
+        choices=["weekly", "monthly", "calendar-week", "calendar-month"],
         required=True,
-        help="Reporting preset. weekly=last 7 days, monthly=last 30 days.",
+        help=(
+            "Reporting preset. "
+            "weekly=last 7 days, monthly=last 30 days, "
+            "calendar-week=from Monday of the containing ISO week to --until, "
+            "calendar-month=from the first day of the containing month to --until."
+        ),
     )
     parser.add_argument(
         "--until",
@@ -60,8 +65,14 @@ def parse_date(value: str) -> date:
 
 
 def compute_window(preset: str, until: date) -> tuple[date, date]:
-    days = 7 if preset == "weekly" else 30
-    since = until - timedelta(days=days - 1)
+    if preset == "weekly":
+        since = until - timedelta(days=6)
+    elif preset == "monthly":
+        since = until - timedelta(days=29)
+    elif preset == "calendar-week":
+        since = until - timedelta(days=until.weekday())
+    else:
+        since = until.replace(day=1)
     return since, until
 
 
@@ -80,6 +91,7 @@ def enrich_activity_json(activity_path: Path, preset: str, run_dir: Path) -> Non
     payload["run_metadata"] = {
         "preset": preset,
         "run_dir": str(run_dir),
+        "window_mode": "calendar" if preset.startswith("calendar-") else "rolling",
     }
     activity_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
