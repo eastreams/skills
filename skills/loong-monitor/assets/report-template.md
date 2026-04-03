@@ -25,6 +25,14 @@ Summarize:
 - open issue pressure
 - signs of stabilization, expansion, or blockage
 
+## Comparison To Previous Window
+
+Optional when comparison data is available:
+
+- current window versus previous window deltas
+- whether throughput is improving or slipping
+- whether new labels, terms, or path clusters are emerging
+
 ## Risks And Open Questions
 
 Call out stalled PRs, unresolved issues, review bottlenecks, or missing follow-through.

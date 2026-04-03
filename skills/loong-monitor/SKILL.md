@@ -27,6 +27,7 @@ Capture:
 
 - target repository, usually `loongclaw-ai/loongclaw`
 - time window: `--days`, or explicit `--since` and `--until`
+- whether you want previous-window comparison enabled
 - whether you need only a summary or a full report artifact
 
 If the request is ambiguous, make a reasonable default and state it.
@@ -39,6 +40,7 @@ Run the collector script before writing conclusions:
 python3 skills/loong-monitor/scripts/collect_repo_activity.py \
   --repo loongclaw-ai/loongclaw \
   --days 30 \
+  --compare-previous \
   --output /tmp/loong-monitor
 ```
 
@@ -59,6 +61,14 @@ The script produces:
 - `activity.json`: raw collected issue and PR data plus computed summary signals
 - `summary.md`: a compact evidence digest you can quote and reason over
 
+When you need a full report, generate it from the collected artifact:
+
+```bash
+python3 skills/loong-monitor/scripts/generate_report.py \
+  --activity /tmp/loong-monitor/activity.json \
+  --output /tmp/loong-monitor/report.md
+```
+
 ### 3. Interpret with discipline
 
 Use the collected evidence to separate three layers of conclusions:
@@ -73,12 +83,15 @@ Do not treat inferred roadmap direction as confirmed fact unless it is explicitl
 
 Use [assets/report-template.md](assets/report-template.md) as the output skeleton when the user wants a written report.
 
+Prefer the generated report script when the user asks for a reusable report artifact, a weekly digest, or a compare-the-last-two-windows assessment.
+
 Minimum report structure:
 
 - Monitoring window and repo
 - Executive summary
 - Current focus areas
 - Current status and delivery signals
+- Comparison to previous window when requested
 - Risks, blockers, and unresolved threads
 - Likely next directions
 - Evidence appendix with linked issue and PR references

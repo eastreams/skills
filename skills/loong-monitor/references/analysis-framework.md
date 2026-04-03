@@ -51,6 +51,13 @@ Assess the project status using these lenses:
 - stabilization signals: docs, tests, refactors, cleanup, architecture work
 - expansion signals: new subsystems, new feature threads, exploratory issues
 
+When previous-window comparison is available, evaluate whether:
+
+- merged throughput is rising, flat, or falling
+- open PR pressure is growing faster than merged throughput
+- open issue count is accumulating or shrinking
+- new labels, terms, or path clusters indicate a genuine new direction rather than noise
+
 Status labels should be plain and descriptive, for example:
 
 - "active delivery with moderate review queue"
@@ -69,12 +76,15 @@ Only infer next directions from patterns such as:
 
 Always mark these statements as inference or likely direction.
 
+If a new direction is inferred from only one PR or issue, say that confidence is low.
+
 ## Report Checklist
 
 Before finalizing the report, ensure it includes:
 
 - explicit monitoring window
 - total issue and PR counts for the window
+- comparison notes when a previous-window sample was collected
 - at least 3 concrete linked artifacts in the evidence section when available
 - a clear distinction between current facts and future inference
 - a statement of uncertainty if labels, file paths, or sample size are weak

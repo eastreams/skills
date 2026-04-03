@@ -71,6 +71,11 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Directory where activity.json and summary.md will be written.",
     )
+    parser.add_argument(
+        "--compare-previous",
+        action="store_true",
+        help="Also collect a same-length previous window and compute deltas.",
+    )
     return parser.parse_args()
 
 
@@ -98,6 +103,13 @@ def compute_window(args: argparse.Namespace) -> tuple[date, date]:
     if since > until:
         raise SystemExit("--since must be on or before --until")
     return since, until
+
+
+def previous_window(since: date, until: date) -> tuple[date, date]:
+    span_days = (until - since).days + 1
+    previous_until = since - timedelta(days=1)
+    previous_since = previous_until - timedelta(days=span_days - 1)
+    return previous_since, previous_until
 
 
 def search_items(repo: str, kind: str, since: date, until: date, limit: int) -> list[dict[str, Any]]:
@@ -280,6 +292,51 @@ def item_counts(
     }
 
 
+def diff_counts(current: dict[str, Any], previous: dict[str, Any]) -> dict[str, int]:
+    return {
+        "prs_total": current["prs"]["total"] - previous["prs"]["total"],
+        "prs_merged": current["prs"]["merged"] - previous["prs"]["merged"],
+        "prs_open": current["prs"]["open"] - previous["prs"]["open"],
+        "issues_total": current["issues"]["total"] - previous["issues"]["total"],
+        "issues_open": current["issues"]["open"] - previous["issues"]["open"],
+    }
+
+
+def emerging_names(
+    current_items: list[dict[str, int]],
+    previous_items: list[dict[str, int]],
+    key: str,
+) -> list[str]:
+    previous_names = {item[key] for item in previous_items}
+    emerging = [item[key] for item in current_items if item[key] not in previous_names]
+    return emerging[:5]
+
+
+def build_comparison(
+    current_summary: dict[str, Any],
+    previous_summary: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "previous": previous_summary,
+        "delta": diff_counts(current_summary["counts"], previous_summary["counts"]),
+        "emerging_labels": emerging_names(
+            current_summary["top_labels"],
+            previous_summary["top_labels"],
+            "label",
+        ),
+        "emerging_terms": emerging_names(
+            current_summary["top_terms"],
+            previous_summary["top_terms"],
+            "term",
+        ),
+        "emerging_paths": emerging_names(
+            current_summary["top_paths"],
+            previous_summary["top_paths"],
+            "path",
+        ),
+    }
+
+
 def build_summary(
     repo: str,
     since: date,
@@ -287,6 +344,7 @@ def build_summary(
     pr_search: list[dict[str, Any]],
     issue_search: list[dict[str, Any]],
     summary: dict[str, Any],
+    comparison: dict[str, Any] | None = None,
 ) -> str:
     lines = [
         f"# Activity Summary for {repo}",
@@ -340,6 +398,41 @@ def build_summary(
     else:
         lines.append("- No author activity detected.")
 
+    if comparison is not None:
+        previous = comparison["previous"]
+        delta = comparison["delta"]
+        lines.extend(
+            [
+                "",
+                "## Comparison To Previous Window",
+                (
+                    "- Previous window: "
+                    f"{previous['window']['since']} to {previous['window']['until']}"
+                ),
+                (
+                    "- PR volume delta: "
+                    f"{delta['prs_total']:+d} total, {delta['prs_merged']:+d} merged, "
+                    f"{delta['prs_open']:+d} open"
+                ),
+                (
+                    "- Issue volume delta: "
+                    f"{delta['issues_total']:+d} total, {delta['issues_open']:+d} open"
+                ),
+            ]
+        )
+        if comparison["emerging_paths"]:
+            lines.append(
+                "- Emerging paths: " + ", ".join(comparison["emerging_paths"])
+            )
+        if comparison["emerging_labels"]:
+            lines.append(
+                "- Emerging labels: " + ", ".join(comparison["emerging_labels"])
+            )
+        if comparison["emerging_terms"]:
+            lines.append(
+                "- Emerging title terms: " + ", ".join(comparison["emerging_terms"])
+            )
+
     lines.extend(["", "## High-Discussion PRs"])
     if summary["counts"]["high_discussion_prs"]:
         lines.extend(
@@ -373,25 +466,30 @@ def build_summary(
     return "\n".join(lines) + "\n"
 
 
-def main() -> int:
-    args = parse_args()
-    since, until = compute_window(args)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
+def collect_window(
+    repo: str,
+    since: date,
+    until: date,
+    limit: int,
+    detail_limit: int,
+) -> dict[str, Any]:
+    pr_search = search_items(repo, "pr", since, until, limit)
+    issue_search = search_items(repo, "issue", since, until, limit)
 
-    pr_search = search_items(args.repo, "pr", since, until, args.limit)
-    issue_search = search_items(args.repo, "issue", since, until, args.limit)
-
-    pr_numbers = [item["number"] for item in pr_search[: args.detail_limit]]
-    issue_numbers = [item["number"] for item in issue_search[: args.detail_limit]]
+    pr_numbers = [item["number"] for item in pr_search[:detail_limit]]
+    issue_numbers = [item["number"] for item in issue_search[:detail_limit]]
     pr_snapshot_numbers = [item["number"] for item in pr_search]
 
-    prs = [pr_detail(args.repo, number) for number in pr_numbers]
-    issues = [issue_detail(args.repo, number) for number in issue_numbers]
-    pr_snapshots = [pr_snapshot(args.repo, number) for number in pr_snapshot_numbers]
+    prs = [pr_detail(repo, number) for number in pr_numbers]
+    issues = [issue_detail(repo, number) for number in issue_numbers]
+    pr_snapshots = [pr_snapshot(repo, number) for number in pr_snapshot_numbers]
 
     summary = {
-        "detail_limit": args.detail_limit,
+        "window": {
+            "since": since.isoformat(),
+            "until": until.isoformat(),
+        },
+        "detail_limit": detail_limit,
         "counts": item_counts(pr_search, issue_search, pr_snapshots, prs, issues),
         "top_labels": extract_top_labels(pr_search + issue_search),
         "top_authors": top_authors(pr_search + issue_search),
@@ -399,15 +497,10 @@ def main() -> int:
         "top_terms": title_terms(pr_search + issue_search),
     }
 
-    payload = {
-        "repo": args.repo,
+    return {
         "window": {
             "since": since.isoformat(),
             "until": until.isoformat(),
-        },
-        "limits": {
-            "search_limit": args.limit,
-            "detail_limit": args.detail_limit,
         },
         "summary": summary,
         "pr_search": pr_search,
@@ -417,11 +510,60 @@ def main() -> int:
         "issues": issues,
     }
 
+
+def main() -> int:
+    args = parse_args()
+    since, until = compute_window(args)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    current = collect_window(args.repo, since, until, args.limit, args.detail_limit)
+    comparison = None
+    previous = None
+    if args.compare_previous:
+        prev_since, prev_until = previous_window(since, until)
+        previous = collect_window(
+            args.repo,
+            prev_since,
+            prev_until,
+            args.limit,
+            args.detail_limit,
+        )
+        comparison = build_comparison(current["summary"], previous["summary"])
+
+    payload = {
+        "repo": args.repo,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "window": {
+            "since": since.isoformat(),
+            "until": until.isoformat(),
+        },
+        "limits": {
+            "search_limit": args.limit,
+            "detail_limit": args.detail_limit,
+        },
+        "summary": current["summary"],
+        "comparison": comparison,
+        "pr_search": current["pr_search"],
+        "issue_search": current["issue_search"],
+        "pr_snapshots": current["pr_snapshots"],
+        "prs": current["prs"],
+        "issues": current["issues"],
+        "previous_window": previous,
+    }
+
     activity_path = output_dir / "activity.json"
     summary_path = output_dir / "summary.md"
     activity_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     summary_path.write_text(
-        build_summary(args.repo, since, until, pr_search, issue_search, summary),
+        build_summary(
+            args.repo,
+            since,
+            until,
+            current["pr_search"],
+            current["issue_search"],
+            current["summary"],
+            comparison,
+        ),
         encoding="utf-8",
     )
 
