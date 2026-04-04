@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -58,6 +59,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable previous-window comparison for this run.",
     )
+    parser.add_argument(
+        "--copy-to",
+        help=(
+            "Optional publish root. When set, the run directory is copied to "
+            "<copy-to>/<repo_slug>/<run-name>/ and latest views are refreshed."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -92,6 +100,29 @@ def run_command(command: list[str]) -> None:
         raise SystemExit(completed.returncode)
 
 
+def reset_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def publish_run(run_dir: Path, repo_slug: str, preset: str, copy_root: str) -> dict[str, str]:
+    publish_root = Path(copy_root) / repo_slug
+    published_dir = publish_root / run_dir.name
+    latest_preset_dir = publish_root / f"latest-{preset}"
+    latest_dir = publish_root / "latest"
+
+    for target in (published_dir, latest_preset_dir, latest_dir):
+        reset_dir(target)
+        shutil.copytree(run_dir, target)
+
+    return {
+        "published_dir": str(published_dir),
+        "latest_preset_dir": str(latest_preset_dir),
+        "latest_dir": str(latest_dir),
+    }
+
+
 def enrich_activity_json(activity_path: Path, preset: str, run_dir: Path) -> None:
     payload = json.loads(activity_path.read_text(encoding="utf-8"))
     payload["run_metadata"] = {
@@ -106,10 +137,11 @@ def main() -> int:
     args = parse_args()
     until = parse_date(args.until) if args.until else datetime.now(timezone.utc).date()
     since, until = compute_window(args.preset, until)
+    repo_slug = slug_repo(args.repo)
 
     run_dir = (
         Path(args.output_root)
-        / slug_repo(args.repo)
+        / repo_slug
         / f"{args.preset}-{since.isoformat()}_to_{until.isoformat()}"
     )
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -150,29 +182,50 @@ def main() -> int:
         ]
     )
 
-    manifest = run_dir / "run.txt"
-    manifest.write_text(
-        "\n".join(
+    publish_info: dict[str, str] = {}
+    if args.copy_to:
+        publish_info = publish_run(run_dir, repo_slug, args.preset, args.copy_to)
+
+    manifest_lines = [
+        f"repo={args.repo}",
+        f"preset={args.preset}",
+        f"since={since.isoformat()}",
+        f"until={until.isoformat()}",
+        f"compare_previous={'false' if args.no_compare_previous else 'true'}",
+        f"activity={run_dir / 'activity.json'}",
+        f"summary={run_dir / 'summary.md'}",
+        f"report={run_dir / 'report.md'}",
+    ]
+    if publish_info:
+        manifest_lines.extend(
             [
-                f"repo={args.repo}",
-                f"preset={args.preset}",
-                f"since={since.isoformat()}",
-                f"until={until.isoformat()}",
-                f"compare_previous={'false' if args.no_compare_previous else 'true'}",
-                f"activity={run_dir / 'activity.json'}",
-                f"summary={run_dir / 'summary.md'}",
-                f"report={run_dir / 'report.md'}",
+                f"published_dir={publish_info['published_dir']}",
+                f"latest_preset_dir={publish_info['latest_preset_dir']}",
+                f"latest_dir={publish_info['latest_dir']}",
             ]
         )
-        + "\n",
-        encoding="utf-8",
-    )
+
+    manifest = run_dir / "run.txt"
+    manifest.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+
+    if publish_info:
+        for target in (
+            Path(publish_info["published_dir"]),
+            Path(publish_info["latest_preset_dir"]),
+            Path(publish_info["latest_dir"]),
+        ):
+            manifest_target = target / "run.txt"
+            manifest_target.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
 
     print(f"Run directory: {run_dir}")
     print(f"Activity JSON: {run_dir / 'activity.json'}")
     print(f"Summary: {run_dir / 'summary.md'}")
     print(f"Report: {run_dir / 'report.md'}")
     print(f"Manifest: {manifest}")
+    if publish_info:
+        print(f"Published directory: {publish_info['published_dir']}")
+        print(f"Latest preset directory: {publish_info['latest_preset_dir']}")
+        print(f"Latest directory: {publish_info['latest_dir']}")
     return 0
 
 

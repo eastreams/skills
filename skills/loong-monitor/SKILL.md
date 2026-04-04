@@ -102,6 +102,20 @@ The script produces:
 - `report.md`: a full Markdown monitoring report when you use the one-click preset runner
 - `run.txt`: a small manifest showing the exact output paths for the run
 
+If the team needs stable artifact locations outside `/tmp`, publish the run to a fixed directory:
+
+```bash
+python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
+  --preset weekly \
+  --copy-to /path/to/team-monitor-reports
+```
+
+This creates:
+
+- `<copy-to>/<repo_slug>/<run-name>/`
+- `<copy-to>/<repo_slug>/latest-<preset>/`
+- `<copy-to>/<repo_slug>/latest/`
+
 When you need a full report, generate it from the collected artifact:
 
 ```bash
