@@ -66,6 +66,13 @@ def parse_args() -> argparse.Namespace:
             "<copy-to>/<repo_slug>/<run-name>/ and latest views are refreshed."
         ),
     )
+    parser.add_argument(
+        "--index-file",
+        help=(
+            "Optional Markdown index path for published runs. "
+            "Defaults to <copy-to>/<repo_slug>/index.md when --copy-to is set."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -117,10 +124,70 @@ def publish_run(run_dir: Path, repo_slug: str, preset: str, copy_root: str) -> d
         shutil.copytree(run_dir, target)
 
     return {
+        "publish_root": str(publish_root),
         "published_dir": str(published_dir),
         "latest_preset_dir": str(latest_preset_dir),
         "latest_dir": str(latest_dir),
     }
+
+
+def write_publish_index(
+    publish_root: Path,
+    repo: str,
+    index_path: Path,
+) -> None:
+    publish_root.mkdir(parents=True, exist_ok=True)
+    run_dirs = sorted(
+        [
+            path for path in publish_root.iterdir()
+            if path.is_dir() and not path.name.startswith("latest")
+        ],
+        key=lambda path: path.name,
+        reverse=True,
+    )
+    latest_dirs = sorted(
+        [
+            path for path in publish_root.iterdir()
+            if path.is_dir() and path.name.startswith("latest")
+        ],
+        key=lambda path: path.name,
+    )
+
+    lines = [
+        "# Loong Monitor Published Index",
+        "",
+        f"- Repository slug root: `{publish_root}`",
+        f"- Source repository: `{repo}`",
+        f"- Updated at: {datetime.now(timezone.utc).isoformat()}",
+        "",
+        "## Latest Views",
+        "",
+    ]
+
+    if latest_dirs:
+        for path in latest_dirs:
+            report = path / "report.md"
+            manifest = path / "run.txt"
+            lines.append(
+                f"- `{path.name}`: report `{report}`, manifest `{manifest}`"
+            )
+    else:
+        lines.append("- No latest views published yet.")
+
+    lines.extend(["", "## Recent Published Runs", ""])
+    if run_dirs:
+        for path in run_dirs[:20]:
+            report = path / "report.md"
+            summary = path / "summary.md"
+            manifest = path / "run.txt"
+            lines.append(
+                f"- `{path.name}`: report `{report}`, summary `{summary}`, manifest `{manifest}`"
+            )
+    else:
+        lines.append("- No published runs found.")
+
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def enrich_activity_json(activity_path: Path, preset: str, run_dir: Path) -> None:
@@ -185,6 +252,13 @@ def main() -> int:
     publish_info: dict[str, str] = {}
     if args.copy_to:
         publish_info = publish_run(run_dir, repo_slug, args.preset, args.copy_to)
+        index_path = (
+            Path(args.index_file)
+            if args.index_file
+            else Path(publish_info["publish_root"]) / "index.md"
+        )
+        write_publish_index(Path(publish_info["publish_root"]), args.repo, index_path)
+        publish_info["index_file"] = str(index_path)
 
     manifest_lines = [
         f"repo={args.repo}",
@@ -199,9 +273,11 @@ def main() -> int:
     if publish_info:
         manifest_lines.extend(
             [
+                f"publish_root={publish_info['publish_root']}",
                 f"published_dir={publish_info['published_dir']}",
                 f"latest_preset_dir={publish_info['latest_preset_dir']}",
                 f"latest_dir={publish_info['latest_dir']}",
+                f"index_file={publish_info['index_file']}",
             ]
         )
 
@@ -226,6 +302,7 @@ def main() -> int:
         print(f"Published directory: {publish_info['published_dir']}")
         print(f"Latest preset directory: {publish_info['latest_preset_dir']}")
         print(f"Latest directory: {publish_info['latest_dir']}")
+        print(f"Index file: {publish_info['index_file']}")
     return 0
 
 

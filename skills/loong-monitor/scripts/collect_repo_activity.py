@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import subprocess
 import sys
 from collections import Counter
@@ -80,17 +81,31 @@ def parse_args() -> argparse.Namespace:
 
 
 def run_json(command: list[str]) -> Any:
-    try:
-        completed = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        sys.stderr.write(exc.stderr)
-        raise
-    return json.loads(completed.stdout)
+    last_exc: subprocess.CalledProcessError | None = None
+    for attempt in range(3):
+        try:
+            completed = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return json.loads(completed.stdout)
+        except subprocess.CalledProcessError as exc:
+            last_exc = exc
+            stderr = exc.stderr or ""
+            retryable = (
+                "TLS handshake timeout" in stderr
+                or "timeout" in stderr.lower()
+                or "connection reset" in stderr.lower()
+                or "temporarily unavailable" in stderr.lower()
+            )
+            if not retryable or attempt == 2:
+                sys.stderr.write(stderr)
+                raise
+            time.sleep(1.5 * (attempt + 1))
+    assert last_exc is not None
+    raise last_exc
 
 
 def iso_date(value: str) -> date:

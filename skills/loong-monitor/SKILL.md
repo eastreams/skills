@@ -110,11 +110,21 @@ python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
   --copy-to /path/to/team-monitor-reports
 ```
 
+To maintain a Markdown index for published runs:
+
+```bash
+python3 skills/loong-monitor/scripts/run_monitor_cycle.py \
+  --preset weekly \
+  --copy-to /path/to/team-monitor-reports \
+  --index-file /path/to/team-monitor-reports/loongclaw-ai__loongclaw/index.md
+```
+
 This creates:
 
 - `<copy-to>/<repo_slug>/<run-name>/`
 - `<copy-to>/<repo_slug>/latest-<preset>/`
 - `<copy-to>/<repo_slug>/latest/`
+- `<copy-to>/<repo_slug>/index.md` by default, or a custom path when `--index-file` is set
 
 When you need a full report, generate it from the collected artifact:
 
